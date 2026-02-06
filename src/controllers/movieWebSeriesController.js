@@ -51,8 +51,8 @@ const uploadMovie = async (req, res) => {
 
     // multipart upload for large files
     const uploadToS3 = s3.upload(params, {
-      partSize: 10 * 1024 * 1024, // 10MB chunks
-      queueSize: 5, // concurrent uploads
+      partSize: 20 * 1024 * 1024, // 20MB chunks
+      queueSize: 10, // concurrent uploads
     });
 
     uploadToS3.on("httpUploadProgress", (progress) => {
