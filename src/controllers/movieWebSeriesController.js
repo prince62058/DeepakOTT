@@ -444,6 +444,83 @@ const getMovieOrSeriesById = async (req, res) => {
   }
 };
 
+// deep delete movie/ web series
+const deleteMovieOrWebSeries = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const movie = await MovieWebSeries.findById(id);
+    if (!movie) {
+      return res.status(404).json({
+        success: false,
+        message: "Movie/Web Series not found",
+      });
+    }
+
+    // Helper to extract key from full URL
+    // URL format: https://Bucket.Region.digitaloceanspaces.com/Key
+    const extractKey = (url) => {
+      if (!url) return null;
+      try {
+        const urlObj = new URL(url);
+        // The pathname includes the leading slash, so we strip it.
+        // example pathname: /movies/file.mp4 -> Key: movies/file.mp4
+        return urlObj.pathname.substring(1);
+      } catch (e) {
+        console.error("Error parsing URL:", url, e);
+        return null;
+      }
+    };
+
+    const keysToDelete = [];
+    if (movie.file) keysToDelete.push({ Key: extractKey(movie.file) });
+    if (movie.poster) keysToDelete.push({ Key: extractKey(movie.poster) });
+    if (movie.teaserUrl)
+      keysToDelete.push({ Key: extractKey(movie.teaserUrl) });
+
+    // Filter out null keys
+    const validKeys = keysToDelete.filter((k) => k.Key);
+
+    if (validKeys.length > 0) {
+      const deleteParams = {
+        Bucket: process.env.LINODE_OBJECT_BUCKET,
+        Delete: {
+          Objects: validKeys,
+          Quiet: false,
+        },
+      };
+
+      try {
+        await s3.deleteObjects(deleteParams).promise();
+        console.log("Deleted S3 objects:", validKeys);
+      } catch (s3Error) {
+        console.error("Error deleting from S3:", s3Error);
+        // We continue to delete from DB even if S3 fails, or you might choose to abort.
+      }
+    }
+
+    // Delete related data
+    await Promise.all([
+      WatchHistory.deleteMany({ movieOrSeriesId: id }),
+      WishList.deleteMany({ movieOrSeriesId: id }),
+      LikeRate.deleteMany({ movieOrSeriesId: id }),
+      MovieRent.deleteMany({ movieId: id }),
+    ]);
+
+    await MovieWebSeries.findByIdAndDelete(id);
+
+    return res.status(200).json({
+      success: true,
+      message: "Movie/Web Series and associated files deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 // get by id and see trailer without generating watch history
 const getTrailerMovieOrSeriesById = async (req, res) => {
   const { movieOrSeriesId, userId } = req.query;
@@ -512,4 +589,5 @@ module.exports = {
   updateMovieOrWebSeries,
   getMovieOrSeriesById,
   getTrailerMovieOrSeriesById,
+  deleteMovieOrWebSeries,
 };
