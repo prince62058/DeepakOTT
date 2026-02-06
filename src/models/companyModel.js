@@ -20,9 +20,9 @@ const companySchema = new mongoose.Schema(
     facebookUrl: { type: String },
     linkedineUrl: { type: String },
     referralEarning: { type: Number, default: 0 },
-    totalWatchFreeTime:{ type:Number, default:10} // in minutes
+    totalWatchFreeTime: { type: Number, default: 10 }, // in minutes
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const Company = mongoose.model("Company", companySchema);
@@ -90,8 +90,8 @@ Hamara mission hai ki:
 - Agar koi bulb defective nikle, toh uska replacement process fast aur simple hai.
 `,
     homeBanner: [
-      "https://leadkart.in-maa-1.linodeobjects.com/ATTACH_IMAGE/IMAGE/1755514376382_header.png",
-      "https://leadkart.in-maa-1.linodeobjects.com/ATTACH_IMAGE/IMAGE/1755514376382_header.png",
+      "https://satyakabir-bucket.sgp1.digitaloceanspaces.com/ATTACH_IMAGE/IMAGE/1755514376382_header.png",
+      "https://satyakabir-bucket.sgp1.digitaloceanspaces.com/ATTACH_IMAGE/IMAGE/1755514376382_header.png",
     ],
     gst: "22ABCDE1234F1Z5",
     phoneNumber: 7808426662,

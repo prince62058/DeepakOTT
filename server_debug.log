@@ -1,0 +1,58 @@
+[dotenv@17.2.2] injecting env (7) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+[dotenv@17.2.2] injecting env (0) from .env -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[dotenv@17.2.2] injecting env (0) from .env -- tip: 📡 version env with Radar: https://dotenvx.com/radar
+(node:18276) [MONGODB DRIVER] Warning: useNewUrlParser is a deprecated option: useNewUrlParser has no effect since Node.js Driver version 4.0.0 and will be removed in the next major version
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:18276) [MONGODB DRIVER] Warning: useUnifiedTopology is a deprecated option: useUnifiedTopology has no effect since Node.js Driver version 4.0.0 and will be removed in the next major version
+
+################################################
+🚀 Server listening on port: 4555
+🔗 Link: http://localhost:4555
+################################################
+  
+(node:18276) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+✅ MongoDB Connected
+Default company already exists
+2026-02-06T06:09:00.023Z - Job started
+2026-02-06T06:09:00.210Z - Updated 0 MovieRent docs, 0 PurchaseSubscription docs
+2026-02-06T06:09:00.210Z - Job finished
+2026-02-06T06:10:00.020Z - Job started
+2026-02-06T06:10:00.211Z - Updated 0 MovieRent docs, 0 PurchaseSubscription docs
+2026-02-06T06:10:00.212Z - Job finished
+2026-02-06T06:11:00.031Z - Job started
+2026-02-06T06:11:00.228Z - Updated 0 MovieRent docs, 0 PurchaseSubscription docs
+2026-02-06T06:11:00.229Z - Job finished
+2026-02-06T06:12:00.005Z - Job started
+2026-02-06T06:12:00.178Z - Updated 0 MovieRent docs, 0 PurchaseSubscription docs
+2026-02-06T06:12:00.178Z - Job finished
+2026-02-06T06:13:00.105Z - Job started
+2026-02-06T06:13:00.359Z - Updated 0 MovieRent docs, 0 PurchaseSubscription docs
+2026-02-06T06:13:00.359Z - Job finished
+2026-02-06T06:14:00.216Z - Job started
+2026-02-06T06:14:00.643Z - Updated 0 MovieRent docs, 0 PurchaseSubscription docs
+2026-02-06T06:14:00.643Z - Job finished
+2026-02-06T06:15:00.039Z - Job started
+2026-02-06T06:15:00.251Z - Updated 0 MovieRent docs, 0 PurchaseSubscription docs
+2026-02-06T06:15:00.251Z - Job finished
+2026-02-06T06:16:00.031Z - Job started
+2026-02-06T06:16:00.215Z - Updated 0 MovieRent docs, 0 PurchaseSubscription docs
+2026-02-06T06:16:00.216Z - Job finished
+2026-02-06T06:17:00.032Z - Job started
+2026-02-06T06:17:00.215Z - Updated 0 MovieRent docs, 0 PurchaseSubscription docs
+2026-02-06T06:17:00.217Z - Job finished
+2026-02-06T06:18:00.031Z - Job started
+2026-02-06T06:18:00.206Z - Updated 0 MovieRent docs, 0 PurchaseSubscription docs
+2026-02-06T06:18:00.206Z - Job finished
+2026-02-06T06:19:00.028Z - Job started
+2026-02-06T06:19:00.173Z - Updated 0 MovieRent docs, 0 PurchaseSubscription docs
+2026-02-06T06:19:00.173Z - Job finished
+2026-02-06T06:20:00.038Z - Job started
+2026-02-06T06:20:00.447Z - Updated 0 MovieRent docs, 0 PurchaseSubscription docs
+2026-02-06T06:20:00.447Z - Job finished
+2026-02-06T06:21:00.046Z - Job started
+2026-02-06T06:21:00.214Z - Updated 0 MovieRent docs, 0 PurchaseSubscription docs
+2026-02-06T06:21:00.216Z - Job finished

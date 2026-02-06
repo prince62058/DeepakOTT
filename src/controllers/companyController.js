@@ -1,5 +1,7 @@
 const { Company } = require("../models/companyModel");
 
+const { fixData } = require("../utils/urlFixer");
+
 // get company
 const getCompany = async (req, res) => {
   try {
@@ -7,7 +9,7 @@ const getCompany = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Company details fetched successfully",
-      data: companyDetails,
+      data: fixData(companyDetails),
     });
   } catch (error) {
     res.status(500).json({
@@ -67,17 +69,17 @@ const updateCompany = async (req, res) => {
     const loader = req.files?.loader?.[0]?.location || company?.loader;
 
     if (icon && icon !== company?.icon) {
-     // deleteFileFromObjectStorage(company?.icon);
+      // deleteFileFromObjectStorage(company?.icon);
       updatedData.icon = icon;
     }
 
     if (favIcon && favIcon !== company?.favIcon) {
-    //  deleteFileFromObjectStorage(company?.favIcon);
+      //  deleteFileFromObjectStorage(company?.favIcon);
       updatedData.favIcon = favIcon;
     }
 
     if (loader && loader !== company?.loader) {
-     // deleteFileFromObjectStorage(company?.loader);
+      // deleteFileFromObjectStorage(company?.loader);
       updatedData.loader = loader;
     }
 
@@ -88,7 +90,7 @@ const updateCompany = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Company Data Updated Successfully",
-      data: data,
+      data: fixData(data),
     });
   } catch (error) {
     return res.status(500).json({

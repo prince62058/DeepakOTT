@@ -5,12 +5,12 @@ const multerS3 = require("multer-s3");
 
 // AWS S3 Client Setup (v3)
 const s3Client = new S3Client({
-  region: "in-maa-1",
-  endpoint: "https://in-maa-1.linodeobjects.com",
-  forcePathStyle: true,
+  region: "sgp1",
+  endpoint: "https://sgp1.digitaloceanspaces.com",
+  forcePathStyle: false, // DigitalOcean Spaces supports virtual-hosted style
   credentials: {
-   accessKeyId: 'ONX5GHG5U5421621M63F' , 
-   secretAccessKey: "PRIwOYk72vYugYNfbqTI3pZkU36zNY0rEtxcIuzn",
+    accessKeyId: process.env.LINODE_ACCESS_KEY,
+    secretAccessKey: process.env.LINODE_SECRET_KEY,
   },
 });
 
@@ -18,7 +18,7 @@ const s3Client = new S3Client({
 const upload = multer({
   storage: multerS3({
     s3: s3Client,
-    bucket: "leadkart",
+    bucket: "satyakabir-bucket",
     acl: "public-read",
     contentType: multerS3.AUTO_CONTENT_TYPE,
     key: (req, file, cb) => {
@@ -26,7 +26,8 @@ const upload = multer({
 
       if (file.mimetype.startsWith("image")) folderPath = "OTT/IMAGE/";
       else if (file.mimetype.startsWith("video")) folderPath = "OTT/VIDEO/";
-      else if (file.mimetype.startsWith("application/pdf")) folderPath = "OTT/PDF/";
+      else if (file.mimetype.startsWith("application/pdf"))
+        folderPath = "OTT/PDF/";
       else folderPath = "OTT/OTHERS/";
 
       const key = `${folderPath}${Date.now()}_${file.originalname}`;
@@ -43,9 +44,9 @@ async function deleteFileFromObjectStorage(url) {
 
     await s3Client.send(
       new DeleteObjectCommand({
-        Bucket: "leadkart",
+        Bucket: "satyakabir-bucket",
         Key: key,
-      })
+      }),
     );
 
     console.log(`File deleted successfully: ${key}`);
@@ -53,6 +54,5 @@ async function deleteFileFromObjectStorage(url) {
     console.error(`Error deleting file: ${error.message}`);
   }
 }
-
 
 module.exports = { s3Client, upload, deleteFileFromObjectStorage };

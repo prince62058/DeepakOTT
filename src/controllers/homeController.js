@@ -2,6 +2,7 @@ const movieOrWebSeries = require("../models/movieWebSeriesModel");
 const userModel = require("../models/userModels");
 const watchHistory = require("../models/watchHistoryModel");
 const Genre = require("../models/genrePreferenceModel.js");
+const { fixData } = require("../utils/urlFixer");
 
 // home page api
 const homePage = async (req, res) => {
@@ -23,45 +24,47 @@ const homePage = async (req, res) => {
       });
     }
 
-    const watchHistoryData = await watchHistory.find({ userId })
-      .limit(4)
-      .populate({
-        path: "movieOrSeriesId", // populate movie or series
-        populate: [
-          { path: "genre", model: "Genre" }, // populate its genre array
-          { path: "language", model: "Language" }, // populate its language array
-        ],
-      });
-    const trendingData = await movieOrWebSeries
-      .find({
-        imdbRating: { $gte: 7 },
-      })
-      .limit(4).populate("language genre");
-
-    // const recommandedData = await movieOrWebSeries.find({
-    //   genre: { $in: userData.genrePreferences?userData.genrePreferences:All }
-    // }).limit(4);
-
     let recommandedQuery = {};
     if (userData.genrePreferences && userData.genrePreferences.length > 0) {
       recommandedQuery = { genre: { $in: userData.genrePreferences } };
     }
 
-    const recommandedData = await movieOrWebSeries
-      .find(recommandedQuery)
-      .limit(4).populate("language genre");
-
-    const trendingOne = await movieOrWebSeries.find().populate("language genre").sort({ createdAt: -1 }).limit(4);
+    const [watchHistoryData, trendingData, recommandedData, trendingOne] =
+      await Promise.all([
+        watchHistory
+          .find({ userId })
+          .limit(4)
+          .populate({
+            path: "movieOrSeriesId",
+            populate: [
+              { path: "genre", model: "Genre" },
+              { path: "language", model: "Language" },
+            ],
+          }),
+        movieOrWebSeries
+          .find({ imdbRating: { $gte: 7 } })
+          .limit(4)
+          .populate("language genre"),
+        movieOrWebSeries
+          .find(recommandedQuery)
+          .limit(4)
+          .populate("language genre"),
+        movieOrWebSeries
+          .find()
+          .populate("language genre")
+          .sort({ createdAt: -1 })
+          .limit(4),
+      ]);
 
     return res.status(200).json({
       success: true,
       message: "Home Data Fetched Successfully.",
       data: {
         userData,
-        watchHistoryData,
-        trendingData,
-        recommandedData,
-        trendingOne,
+        watchHistoryData: fixData(watchHistoryData),
+        trendingData: fixData(trendingData),
+        recommandedData: fixData(recommandedData),
+        trendingOne: fixData(trendingOne),
       },
     });
   } catch (error) {
@@ -81,7 +84,11 @@ const trending = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
     const filter = { imdbRating: { $gte: 7 } };
     const [trendingData, total] = await Promise.all([
-      movieOrWebSeries.find(filter).skip(skip).limit(limitNum).populate("language genre"),
+      movieOrWebSeries
+        .find(filter)
+        .skip(skip)
+        .limit(limitNum)
+        .populate("language genre"),
       movieOrWebSeries.countDocuments(filter),
     ]);
     return res.status(200).json({
@@ -154,7 +161,10 @@ const recommanded = async (req, res) => {
 // new release page api
 const newRelease = async (req, res) => {
   try {
-    const data = await movieOrWebSeries.find().sort({ releaseDate: -1 }).populate("language genre");
+    const data = await movieOrWebSeries
+      .find()
+      .sort({ releaseDate: -1 })
+      .populate("language genre");
     return res.status(200).json({
       success: true,
       message: "New Release Data Fetched Successfully.",
@@ -189,8 +199,8 @@ const categoryData = async (req, res) => {
       message: "All Category Data Fetched Successfully.",
       data: {
         genreData,
-        newReleaseData,
-        trendingData,
+        newReleaseData: fixData(newReleaseData),
+        trendingData: fixData(trendingData),
       },
     });
   } catch (error) {
@@ -227,13 +237,13 @@ const searchedFilterApi = async (req, res) => {
         { description: new RegExp(search, "i") },
         { director: new RegExp(search, "i") },
         { writer: new RegExp(search, "i") },
-        { 'cast.name': new RegExp(search, "i") },
-        { 'subSeries.name': new RegExp(search, "i") },
-        { 'subSeries.description': new RegExp(search, "i") },
-        { 'subSeries.director': new RegExp(search, "i") },
-        { 'subSeries.writer': new RegExp(search, "i") },
-        { 'subSeries.cast.name': new RegExp(search, "i") }
-      ]
+        { "cast.name": new RegExp(search, "i") },
+        { "subSeries.name": new RegExp(search, "i") },
+        { "subSeries.description": new RegExp(search, "i") },
+        { "subSeries.director": new RegExp(search, "i") },
+        { "subSeries.writer": new RegExp(search, "i") },
+        { "subSeries.cast.name": new RegExp(search, "i") },
+      ],
     }),
   };
   try {

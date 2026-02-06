@@ -4,16 +4,23 @@ const WishList = require("../models/wishListModel");
 const LikeRate = require("../models/likeRateModel");
 const MovieRent = require("../models/movieRentModel");
 const AWS = require("aws-sdk");
+const { fixData } = require("../utils/urlFixer");
 require("dotenv").config();
 
-// configure AWS SDK for Linode
+// configure AWS SDK for DigitalOcean Spaces
+const spacesEndpoint = new AWS.Endpoint(
+  process.env.LINODE_OBJECT_STORAGE_ENDPOINT.startsWith("http")
+    ? process.env.LINODE_OBJECT_STORAGE_ENDPOINT
+    : `https://${process.env.LINODE_OBJECT_STORAGE_ENDPOINT}`,
+);
+
 const s3 = new AWS.S3({
   accessKeyId: process.env.LINODE_ACCESS_KEY,
   secretAccessKey: process.env.LINODE_SECRET_KEY,
-  endpoint: new AWS.Endpoint(process.env.LINODE_OBJECT_STORAGE_ENDPOINT),
-  s3ForcePathStyle: true, // important for Linode
-  signatureVersion: "v4", // Linode requires v4
-  region: "us-east-1", // arbitrary but required
+  endpoint: spacesEndpoint,
+  s3ForcePathStyle: false, // DigitalOcean supports virtual-hosted style
+  signatureVersion: "v4",
+  region: "sgp1",
 });
 
 // upload controller for movies/ web series
@@ -26,13 +33,19 @@ const uploadMovie = async (req, res) => {
       });
     }
 
+    console.log(
+      "Uploading file to Spaces:",
+      req.file.originalname,
+      "Bucket:",
+      process.env.LINODE_OBJECT_BUCKET,
+    );
+
     // set upload parameters
     const params = {
       Bucket: process.env.LINODE_OBJECT_BUCKET,
       Key: `movies/${Date.now()}-${req.file.originalname}`,
       Body: req.file.buffer, // direct buffer
       ContentType: req.file.mimetype,
-      // ContentType: 'video/x-matroska', // correct for MKV               // ensures browser can stream
       ACL: "public-read", // make it publicly viewable
     };
 
@@ -42,28 +55,32 @@ const uploadMovie = async (req, res) => {
       queueSize: 5, // concurrent uploads
     });
 
-    // optional: track progress
     uploadToS3.on("httpUploadProgress", (progress) => {
-      console.log(progress);
+      // console.log(progress); // Too detailed for production logs
     });
 
     const data = await uploadToS3.promise();
+    console.log("Upload success:", data.Location);
 
-    // save metadata in MongoDB (optional)
-    // const newMovie = await MovieWebSeries.create({
-    //   title: req.body.title,
-    //   description: req.body.description,
-    //   url: data.Location
-    // });
-    let mainURL = `https://leadkart.in-maa-1.linodeobjects.com/${data.Key}`;
+    // Ensure we construct the DigitalOcean URL correctly
+    let mainURL = data.Location;
+    // Fallback if Location is not what we expect (though for spaces it usually is)
+    if (!mainURL.includes("digitaloceanspaces.com")) {
+      mainURL = `https://${process.env.LINODE_OBJECT_BUCKET}.sgp1.digitaloceanspaces.com/${data.Key}`;
+    }
+
     res.status(201).json({
       success: true,
       message: "Movie uploaded successfully",
-      url: mainURL, // use this URL in <video src="">
+      url: mainURL,
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error("Upload Error Details:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      details: error.code, // extra info for debugging
+    });
   }
 };
 
@@ -91,11 +108,11 @@ const createMovieOrWebSeries = async (req, res) => {
     watchQuality,
     rating,
   } = req.body;
-  
+
   // Helper function to safely parse JSON strings
   const parseIfString = (value) => {
     if (!value) return undefined;
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       try {
         return JSON.parse(value);
       } catch (e) {
@@ -136,7 +153,7 @@ const createMovieOrWebSeries = async (req, res) => {
       parentsSeries,
       subSeries: updatedSubSeries,
       imdbRating,
-      watchQuality: watchQuality || 'HD',
+      watchQuality: watchQuality || "HD",
       rating,
     });
 
@@ -177,13 +194,13 @@ const updateMovieOrWebSeries = async (req, res) => {
     imdbRating,
     watchQuality,
     index,
-    session
+    session,
   } = req.body;
-  
+
   // Helper function to safely parse JSON strings
   const parseIfString = (value) => {
     if (!value) return undefined;
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       try {
         return JSON.parse(value);
       } catch (e) {
@@ -226,11 +243,11 @@ const updateMovieOrWebSeries = async (req, res) => {
         parentsSeries,
         subSeries: updatedSubSeries,
         imdbRating,
-        watchQuality: watchQuality || 'HD',
+        watchQuality: watchQuality || "HD",
         index,
-        session
+        session,
       },
-      { new: true }
+      { new: true },
     );
 
     return res.status(200).json({
@@ -248,11 +265,11 @@ const updateMovieOrWebSeries = async (req, res) => {
 
 // get all
 const getAllByFilter = async (req, res) => {
-  const { 
-    page = 1, 
-    limit = 20, 
-    sort = '-createdAt',
-    search = '',
+  const {
+    page = 1,
+    limit = 20,
+    sort = "-createdAt",
+    search = "",
     genre,
     language,
     year,
@@ -260,40 +277,40 @@ const getAllByFilter = async (req, res) => {
     minRating = 0,
     maxRating = 10,
     director,
-    cast
+    cast,
   } = req.query;
 
   const skip = (Number(page) - 1) * limit;
-  
+
   try {
     // Build filter object
     const filter = {};
-    
+
     // Search in name, description, director, writer, or cast names
     if (search) {
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { director: { $regex: search, $options: 'i' } },
-        { writer: { $regex: search, $options: 'i' } },
-        { 'cast.name': { $regex: search, $options: 'i' } },
-        { 'subSeries.name': { $regex: search, $options: 'i' } },
-        { 'subSeries.description': { $regex: search, $options: 'i' } },
-        { 'subSeries.director': { $regex: search, $options: 'i' } },
-        { 'subSeries.writer': { $regex: search, $options: 'i' } },
-        { 'subSeries.cast.name': { $regex: search, $options: 'i' } }
+        { name: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+        { director: { $regex: search, $options: "i" } },
+        { writer: { $regex: search, $options: "i" } },
+        { "cast.name": { $regex: search, $options: "i" } },
+        { "subSeries.name": { $regex: search, $options: "i" } },
+        { "subSeries.description": { $regex: search, $options: "i" } },
+        { "subSeries.director": { $regex: search, $options: "i" } },
+        { "subSeries.writer": { $regex: search, $options: "i" } },
+        { "subSeries.cast.name": { $regex: search, $options: "i" } },
       ];
     }
 
     // Filter by genre (can be single ID or comma-separated IDs)
     if (genre) {
-      const genreIds = genre.split(',');
+      const genreIds = genre.split(",");
       filter.genre = { $in: genreIds };
     }
 
     // Filter by language (can be single ID or comma-separated IDs)
     if (language) {
-      const languageIds = language.split(',');
+      const languageIds = language.split(",");
       filter.language = { $in: languageIds };
     }
 
@@ -312,12 +329,12 @@ const getAllByFilter = async (req, res) => {
 
     // Filter by director
     if (director) {
-      filter.director = { $regex: director, $options: 'i' };
+      filter.director = { $regex: director, $options: "i" };
     }
 
     // Filter by cast member
     if (cast) {
-      filter['cast.name'] = { $regex: cast, $options: 'i' };
+      filter["cast.name"] = { $regex: cast, $options: "i" };
     }
 
     // Execute query with filters
@@ -326,15 +343,15 @@ const getAllByFilter = async (req, res) => {
         .sort(sort)
         .skip(skip)
         .limit(Number(limit))
-        .populate('genre language')
+        .populate("genre language")
         .lean(),
-      MovieWebSeries.countDocuments(filter)
+      MovieWebSeries.countDocuments(filter),
     ]);
 
     return res.status(200).json({
       success: true,
       message: "Data fetched successfully with applied filters.",
-      data: data,
+      data: fixData(data),
       currentPage: Number(page),
       page: Math.ceil(total / limit),
     });
@@ -437,7 +454,8 @@ const getTrailerMovieOrSeriesById = async (req, res) => {
         message: "movieOrSeriesId and userId are required",
       });
     }
-    const data = await MovieWebSeries.findById(movieOrSeriesId).populate("genre language");;
+    const data =
+      await MovieWebSeries.findById(movieOrSeriesId).populate("genre language");
 
     if (!data) {
       return res.status(404).json({
@@ -476,8 +494,8 @@ const getTrailerMovieOrSeriesById = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "MovieOrSeries Data Fetched Successfully.",
-      data: data,
-      moreLikeThis: moreLikeThis,
+      data: fixData(data),
+      moreLikeThis: fixData(moreLikeThis),
     });
   } catch (error) {
     return res.status(500).json({

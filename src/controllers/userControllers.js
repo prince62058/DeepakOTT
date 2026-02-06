@@ -2,13 +2,14 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const userModel = require("../models/userModels");
 const PurchaseSubscription = require("../models/purchaseSubscriptionModel");
+const { fixData } = require("../utils/urlFixer");
 
 const ADMIN_LOGIN_EXCLUDE_FIELDS = "-otp -fcmToken";
 
 const ADMIN_USER_LIST_PROJECTION = "-password -otp -fcmToken";
 
 // SendOtp Api (logIn)
-let generateOtp =  Math.floor(1000 + Math.random() * 9000);
+let generateOtp = Math.floor(1000 + Math.random() * 9000);
 const http = require("http");
 
 const otpLimits = {}; // In-memory store for OTP counts
@@ -28,8 +29,7 @@ const sendOtpphone = (mobile, otp) => {
   // Check if the current time is within the limit window
   if (currentTime - firstSentTime < OTP_WINDOW) {
     if (count >= OTP_LIMIT) {
-      return  false
-      
+      return false;
     }
   } else {
     // Reset the count and time if the window has passed
@@ -62,7 +62,7 @@ const sendOtpphone = (mobile, otp) => {
   });
 
   req.write(
-    `{\n  \"flow_id\": \"63614b3dabf10640e61fa856\",\n  \"sender\": \"DSMONL\",\n  \"mobiles\": \"91${mobile}\",\n  \"otp\": \"${otp}\"\n}`
+    `{\n  \"flow_id\": \"63614b3dabf10640e61fa856\",\n  \"sender\": \"DSMONL\",\n  \"mobiles\": \"91${mobile}\",\n  \"otp\": \"${otp}\"\n}`,
   );
   req.end();
 
@@ -106,7 +106,7 @@ async function adminLogin(req, res) {
     if (!admin || admin?.disable) {
       return res.status(401).json({
         success: false,
-        message:  admin?.disable ? "Ban The Admin" : "Invalid credentials.",
+        message: admin?.disable ? "Ban The Admin" : "Invalid credentials.",
       });
     }
 
@@ -128,7 +128,7 @@ async function adminLogin(req, res) {
     return res.status(200).json({
       success: true,
       message: "Admin login successful.",
-      data: admin,
+      data: fixData(admin),
     });
   } catch (error) {
     return res.status(500).json({
@@ -139,13 +139,7 @@ async function adminLogin(req, res) {
 }
 
 async function getAllUsers(req, res) {
-  const {
-    page = 1,
-    limit = 20,
-    search,
-    userType,
-    disable,
-  } = req.query;
+  const { page = 1, limit = 20, search, userType, disable } = req.query;
 
   try {
     const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
@@ -158,9 +152,9 @@ async function getAllUsers(req, res) {
     }
 
     if (disable) {
-       filter.disable = disable
+      filter.disable = disable;
     }
-	  
+
     if (search) {
       const regex = new RegExp(search, "i");
       const orConditions = [{ name: regex }, { email: regex }];
@@ -187,7 +181,7 @@ async function getAllUsers(req, res) {
     return res.status(200).json({
       success: true,
       message: "Users fetched successfully.",
-      data: users,
+      data: fixData(users),
       pagination: {
         total,
         page: parsedPage,
@@ -203,7 +197,6 @@ async function getAllUsers(req, res) {
   }
 }
 
-
 async function sendOtp(req, res) {
   const { number } = req.body;
 
@@ -215,25 +208,25 @@ async function sendOtp(req, res) {
       });
     }
     const OTP = number == "8305804161" ? "1234" : generateOtp.toString();
-   await  sendOtpphone(number,OTP)
+    await sendOtpphone(number, OTP);
     const hashOtp = await bcrypt.hash(OTP, 10);
     const userCheck = await userModel.findOneAndUpdate(
       { number },
       { number, otp: hashOtp },
-      { new: true, upsert: true }
+      { new: true, upsert: true },
     );
 
-    if(userCheck?.disable){
+    if (userCheck?.disable) {
       return res.status(400).json({
         success: false,
         message: "User is Banned !",
-      })
-    }else{
-     return res.status(200).json({
-      sucess: true,
-      message: "OTP Sent Successfully",
-      otp: OTP,
-    });
+      });
+    } else {
+      return res.status(200).json({
+        sucess: true,
+        message: "OTP Sent Successfully",
+        otp: OTP,
+      });
     }
   } catch (error) {
     return res.status(500).json({
@@ -241,7 +234,6 @@ async function sendOtp(req, res) {
     });
   }
 }
-
 
 async function verifyOtp(req, res) {
   const { number, otp, fcmToken } = req.body;
@@ -275,7 +267,7 @@ async function verifyOtp(req, res) {
       process.env.JWT_SECRET_KEY,
       {
         expiresIn: "60d",
-      }
+      },
     );
     checkNumber._doc.token = token;
     return res.status(200).json({
@@ -317,13 +309,13 @@ async function CreateProfile(req, res) {
         existingUser: true,
         referBy: req.referral?.userId,
       },
-      { new: true, upsert: true }
+      { new: true, upsert: true },
     );
     await PurchaseSubscription.create({
-      userId:data._id,
+      userId: data._id,
       isActivePlan: true,
-      planType:"FREE_PLAN"
-    })
+      planType: "FREE_PLAN",
+    });
     return res.status(200).json({
       sucess: true,
       message: "Profile Created Successfully.",
@@ -382,7 +374,9 @@ async function profileApiByID(req, res) {
   const { id } = req.params;
 
   try {
-    const find = await userModel.findById(id).select(ADMIN_USER_LIST_PROJECTION);
+    const find = await userModel
+      .findById(id)
+      .select(ADMIN_USER_LIST_PROJECTION);
 
     if (!find) {
       return res.status(404).json({
@@ -402,7 +396,7 @@ async function profileApiByID(req, res) {
     return res.status(200).json({
       sucess: true,
       message: "user featch sucessfully 🎉🎉",
-      data: find,
+      data: fixData(find),
     });
   } catch (error) {
     return res.status(500).json({
@@ -487,7 +481,7 @@ async function disableUserApi(req, res) {
 
 // Update UserProfile Api
 async function updateProfile(req, res) {
-  const { userId, email, image, name ,permissions,password} = req.body;
+  const { userId, email, image, name, permissions, password } = req.body;
   try {
     if (!userId) {
       return res.status(400).json({
@@ -495,19 +489,15 @@ async function updateProfile(req, res) {
         message: "userId is required !",
       });
     }
-    let obj ={};
+    let obj = {};
     obj.email = email;
     obj.image = image;
     obj.name = name;
     obj.permissions = permissions;
-    if(password){
-      obj.password = await bcrypt.hash(password, 10)
+    if (password) {
+      obj.password = await bcrypt.hash(password, 10);
     }
-    const data = await userModel.findByIdAndUpdate(
-      userId,
-       obj,
-      { new: true }
-    );
+    const data = await userModel.findByIdAndUpdate(userId, obj, { new: true });
 
     return res.status(200).json({
       sucess: true,
@@ -520,7 +510,7 @@ async function updateProfile(req, res) {
       message: error.message,
     });
   }
-}// update userPassword Api
+} // update userPassword Api
 
 async function updatePassword(req, res) {
   const user = req.user;
@@ -535,7 +525,7 @@ async function updatePassword(req, res) {
   }
   await userModel.updateOne(
     { _id: user.id },
-    { $set: { password: await bcrypt.hash(newpassword, 10) } }
+    { $set: { password: await bcrypt.hash(newpassword, 10) } },
   );
 
   const update = await userModel.findOne({ _id: user.id });
@@ -563,7 +553,7 @@ async function forgetPassword(req, res) {
 
   const saveOtp = await userModel.updateOne(
     { _id: checkUser.id },
-    { $set: { otp: await bcrypt.hash(generateOtp.toString(), 10) } }
+    { $set: { otp: await bcrypt.hash(generateOtp.toString(), 10) } },
   );
   // console.log(saveOtp);
 
@@ -656,8 +646,6 @@ const logoutApi = async (req, res) => {
   }
 };
 
-
-
 async function validateReferralCode(req, res) {
   const { code } = req.body;
 
@@ -727,7 +715,9 @@ async function createSubAdmin(req, res) {
       });
     }
 
-    const existingUser = await userModel.findOne({ email: email.toLowerCase() });
+    const existingUser = await userModel.findOne({
+      email: email.toLowerCase(),
+    });
 
     if (existingUser) {
       return res.status(409).json({
@@ -737,7 +727,9 @@ async function createSubAdmin(req, res) {
     }
 
     const sanitizedPermissions = (permissions || [])
-      .map((permission) => (typeof permission === "string" ? permission.trim() : ""))
+      .map((permission) =>
+        typeof permission === "string" ? permission.trim() : "",
+      )
       .filter((permission) => permission.length > 0);
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -782,6 +774,6 @@ module.exports = {
   CreateProfile,
   adminLogin,
   getAllUsers,
-	validateReferralCode,
-	createSubAdmin
+  validateReferralCode,
+  createSubAdmin,
 };

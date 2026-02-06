@@ -81,7 +81,7 @@ const updateSubscription = async (req, res) => {
         planType,
       },
 
-      { new: true }
+      { new: true },
     );
 
     return res.status(201).json({
@@ -109,7 +109,7 @@ const getAllSubscription = async (req, res) => {
     const filter = {};
 
     if (disable) {
-      filter.disable = disable
+      filter.disable = disable;
     }
 
     if (search && search.trim()) {
@@ -188,7 +188,9 @@ const disableSubscription = async (req, res) => {
 
 // upload poster
 const imageToUrl = async (req, res) => {
-  const image = req.file ? `https://leadkart.in-maa-1.linodeobjects.com/${req.file.key}` : "";
+  const image = req.file
+    ? `https://satyakabir-bucket.sgp1.digitaloceanspaces.com/${req.file.key}`
+    : "";
   try {
     if (!image) {
       return res.status(400).json({
