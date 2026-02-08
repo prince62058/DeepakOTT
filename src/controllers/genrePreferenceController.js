@@ -3,25 +3,22 @@ const Genre = require("../models/genrePreferenceModel");
 // get all genre
 const getGenre = async (req, res) => {
   try {
-    const { page = 1, limit = 20, search,disable } = req.query;
+    const { page = 1, limit = 20, search, disable } = req.query;
 
     const pageNumber = Math.max(1, Number(page) || 1);
     const limitNumber = Math.max(1, Math.min(Number(limit) || 20, 100));
     const skip = (pageNumber - 1) * limitNumber;
 
-    const filter = { };
-  if(disable){
-    filter.disable = disable
-  }
+    const filter = {};
+    if (disable) {
+      filter.disable = disable;
+    }
     if (search && typeof search === "string" && search.trim()) {
       filter.name = { $regex: search.trim(), $options: "i" };
     }
 
     const [data, total] = await Promise.all([
-      Genre.find(filter)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limitNumber),
+      Genre.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limitNumber),
       Genre.countDocuments(filter),
     ]);
 
@@ -174,9 +171,34 @@ const updateGenre = async (req, res) => {
   }
 };
 
+// delete genre
+const deleteGenre = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const genre = await Genre.findById(id);
+    if (!genre) {
+      return res.status(404).json({
+        success: false,
+        message: "Genre not found",
+      });
+    }
+    await Genre.findByIdAndDelete(id);
+    return res.status(200).json({
+      success: true,
+      message: "Genre deleted successfully",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 module.exports = {
   getGenre,
   getGenreById,
   createGenre,
   updateGenre,
+  deleteGenre,
 };

@@ -21,6 +21,8 @@ const companySchema = new mongoose.Schema(
     linkedineUrl: { type: String },
     referralEarning: { type: Number, default: 0 },
     totalWatchFreeTime: { type: Number, default: 10 }, // in minutes
+    watchEarnRate: { type: Number, default: 0.1 },
+    watchEarnTarget: { type: Number, default: 50 },
   },
   { timestamps: true },
 );

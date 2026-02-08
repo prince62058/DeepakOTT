@@ -1,5 +1,6 @@
 const WishList = require("../models/wishListModel");
 const MovieWebSeries = require("../models/movieWebSeriesModel");
+const { fixData } = require("../utils/urlFixer");
 
 // create wish list
 const createWishList = async (req, res) => {
@@ -11,20 +12,31 @@ const createWishList = async (req, res) => {
         message: "userId and movieOrSeriesId are required !",
       });
     }
-    const fileData = await MovieWebSeries.findById(movieOrSeriesId);
+    const isNested = movieOrSeriesId.includes("_nested_");
+    const normalizedId = isNested
+      ? movieOrSeriesId.split("_nested_")[0]
+      : movieOrSeriesId;
+
+    const fileData = await MovieWebSeries.findById(normalizedId);
+
+    if (!fileData) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Content Not Found !" });
+    }
 
     const existWishList = await WishList.findOne({
       userId,
-      movieOrSeriesId,
+      movieOrSeriesId: normalizedId,
     });
 
-    let data =existWishList;
-    if(!existWishList){
-     data = await WishList.create({
-      userId,
-      movieOrSeriesId,
-      mainType: fileData.mainType,
-    });
+    let data = existWishList;
+    if (!existWishList) {
+      data = await WishList.create({
+        userId,
+        movieOrSeriesId: normalizedId,
+        mainType: fileData.mainType,
+      });
     }
 
     return res.status(201).json({
@@ -65,7 +77,7 @@ const getAllWishListByUserId = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "All Wish List Data Fetched Successfully.",
-      data: data,
+      data: fixData(data),
       currentPage: Number(page),
       page: Math.ceil(total / limit),
     });
@@ -89,9 +101,13 @@ const deleteWishListById = async (req, res) => {
       });
     }
 
+    const normalizedId = movieOrSeriesId.includes("_nested_")
+      ? movieOrSeriesId.split("_nested_")[0]
+      : movieOrSeriesId;
+
     const data = await WishList.findOneAndDelete({
       userId,
-      movieOrSeriesId,
+      movieOrSeriesId: normalizedId,
     });
 
     return res.status(200).json({

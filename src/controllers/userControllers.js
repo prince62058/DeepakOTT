@@ -210,11 +210,31 @@ async function sendOtp(req, res) {
     const OTP = number == "8305804161" ? "1234" : generateOtp.toString();
     await sendOtpphone(number, OTP);
     const hashOtp = await bcrypt.hash(OTP, 10);
-    const userCheck = await userModel.findOneAndUpdate(
-      { number },
-      { number, otp: hashOtp },
-      { new: true, upsert: true },
-    );
+
+    // Check if user exists
+    let userCheck = await userModel.findOne({ number });
+
+    if (userCheck) {
+      // Use updateOne to bypass document validation errors (like corrupted createdAt)
+      // and actively repair the createdAt field using the ObjectId timestamp.
+      const restoredCreatedAt = userCheck._id.getTimestamp();
+
+      await userModel.updateOne(
+        { _id: userCheck._id },
+        {
+          $set: {
+            otp: hashOtp,
+            createdAt: restoredCreatedAt, // Restore valid date
+          },
+        },
+      );
+    } else {
+      // Create new user with proper fields
+      userCheck = await userModel.create({
+        number,
+        otp: hashOtp,
+      });
+    }
 
     if (userCheck?.disable) {
       return res.status(400).json({
@@ -259,8 +279,18 @@ async function verifyOtp(req, res) {
       });
     }
 
-    checkNumber.fcmToken = fcmToken ? fcmToken : "";
-    await checkNumber.save();
+    // checkNumber.fcmToken = fcmToken ? fcmToken : "";
+    // await checkNumber.save();
+
+    // Use updateOne to match the robustness of sendOtp
+    const updatePayload = { fcmToken: fcmToken ? fcmToken : "" };
+    // Ensure createdAt is valid here too if it wasn't fixed yet (though sendOtp should have fixed it)
+    updatePayload.createdAt = checkNumber._id.getTimestamp();
+
+    await userModel.updateOne(
+      { _id: checkNumber._id },
+      { $set: updatePayload },
+    );
 
     const token = jwt.sign(
       { id: checkNumber._id },

@@ -68,7 +68,7 @@ const createPurchaseSubscription = async (req, res) => {
 
       await WatchEarn.updateMany(
         { userId, isPlanActive: true },
-        { $set: { isPlanActive: false } }
+        { $set: { isPlanActive: false } },
       );
 
       await WatchEarn.findOneAndUpdate(
@@ -97,7 +97,7 @@ const createPurchaseSubscription = async (req, res) => {
             monthlyRewardAmount: 0,
           },
         },
-        { new: true, upsert: true, setDefaultsOnInsert: true }
+        { new: true, upsert: true, setDefaultsOnInsert: true },
       );
     }
 
@@ -111,12 +111,21 @@ const createPurchaseSubscription = async (req, res) => {
     });
 
     // give referral earning if someone is referral this candidate
+    // ONLY if this is their first paid subscription
     const userData = await userModel.findById(userId);
-    const companyData = await Company.findOne();
 
+    // Count total PAID subscriptions for this user
+    const paidSubscriptionCount = await PurchaseSubscription.countDocuments({
+      userId,
+      planPrice: { $gt: 0 },
+    });
 
-    if (userData.referBy) {
+    // If this is the FIRST paid subscription (count === 1 because we just created it above)
+    // AND the plan itself is paid (plan.planPrice > 0)
+    if (userData.referBy && paidSubscriptionCount === 1 && plan.planPrice > 0) {
+      const companyData = await Company.findOne();
       const referralUser = await userModel.findById(userData.referBy);
+
       if (referralUser) {
         await userModel.findByIdAndUpdate(referralUser._id, {
           $inc: {
@@ -141,6 +150,7 @@ const createPurchaseSubscription = async (req, res) => {
           message: `Congratulations! You’ve earned ₹${companyData.referralEarning} as a referral commission.`,
           userId: referralUser._id,
           userType: `${referralUser.userType}`,
+          type: "referral",
           schedule: true,
         });
 

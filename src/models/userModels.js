@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-	permissions: {
+    permissions: {
       type: [String],
       default: [],
     },
@@ -46,32 +46,32 @@ const userSchema = new mongoose.Schema(
       enum: ["Admin", "User", "SubAdmin"],
       default: "User",
     },
-    languages:[
+    languages: [
       {
-        type:mongoose.Schema.Types.ObjectId,
-        ref:"Language"
-      }
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Language",
+      },
     ],
-    genrePreferences:[
+    genrePreferences: [
       {
-        type:mongoose.Schema.Types.ObjectId,
-        ref:"Genre"
-      }
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Genre",
+      },
     ],
-    existingUser:{
-      type:Boolean,
-      default:false
+    existingUser: {
+      type: Boolean,
+      default: false,
     },
-    referralCode:{
-      type:String
+    referralCode: {
+      type: String,
     },
-    referralEarning:{
-      type:Number,
-      default:0
+    referralEarning: {
+      type: Number,
+      default: 0,
     },
-    wallet:{
-      type:Number,
-      default:0
+    wallet: {
+      type: Number,
+      default: 0,
     },
     totalFreeTimeCompleted: {
       type: Boolean,
@@ -79,15 +79,15 @@ const userSchema = new mongoose.Schema(
     },
     totalFreeTime: {
       type: Number,
-      default: 10,
+      default: 5,
     },
-    referBy:{
-      type:mongoose.Schema.Types.ObjectId,
-      ref:"user",
-      default:null
-    }
+    referBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "user",
+      default: null,
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 userSchema.statics.ensureDefaultAdmin = async function () {
   const adminEmail = process.env.DEFAULT_ADMIN_EMAIL || "admin@ott.com";
@@ -106,7 +106,7 @@ userSchema.statics.ensureDefaultAdmin = async function () {
     });
 
     console.log(
-      `\nDefault admin created with email: ${adminEmail}. Update the password immediately.\n`
+      `\nDefault admin created with email: ${adminEmail}. Update the password immediately.\n`,
     );
   }
 };

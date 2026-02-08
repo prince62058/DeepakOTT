@@ -1,5 +1,6 @@
 const MovieRent = require("../models/movieRentModel");
 const PurchaseSubscription = require("../models/purchaseSubscriptionModel");
+const { fixData } = require("../utils/urlFixer");
 
 // create movie rent api
 const createMovieRent = async (req, res) => {
@@ -24,9 +25,13 @@ const createMovieRent = async (req, res) => {
       });
     }
 
+    const normalizedId = movieId.includes("_nested_")
+      ? movieId.split("_nested_")[0]
+      : movieId;
+
     const data = await MovieRent.create({
       userId,
-      movieId,
+      movieId: normalizedId,
       planId: havePlan.planId,
       planStartTime: havePlan.planStartTime,
       planExpireTime: havePlan.planExpireTime,
@@ -66,7 +71,7 @@ const getAllMovieRentByUserId = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "All Rented Movie Data Fetched Successfully.",
-      data: data,
+      data: fixData(data),
       currentPage: Number(page),
       page: Math.ceil(total / limit),
     });
@@ -77,7 +82,6 @@ const getAllMovieRentByUserId = async (req, res) => {
     });
   }
 };
-
 
 module.exports = {
   createMovieRent,

@@ -11,12 +11,19 @@ const createOrUpdateLikeRate = async (req, res) => {
       });
     }
 
-    const existData = await LikeRate.findOne({ userId, movieOrSeriesId });
+    const normalizedId = movieOrSeriesId.includes("_nested_")
+      ? movieOrSeriesId.split("_nested_")[0]
+      : movieOrSeriesId;
+
+    const existData = await LikeRate.findOne({
+      userId,
+      movieOrSeriesId: normalizedId,
+    });
 
     if (existData) {
       await LikeRate.findByIdAndDelete(existData._id);
     } else {
-      await LikeRate.create({ userId, movieOrSeriesId });
+      await LikeRate.create({ userId, movieOrSeriesId: normalizedId });
     }
 
     return res.status(200).json({
@@ -31,7 +38,6 @@ const createOrUpdateLikeRate = async (req, res) => {
   }
 };
 
-
-module.exports ={
-    createOrUpdateLikeRate
-}
+module.exports = {
+  createOrUpdateLikeRate,
+};

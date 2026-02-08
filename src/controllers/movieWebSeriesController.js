@@ -62,12 +62,13 @@ const uploadMovie = async (req, res) => {
     const data = await uploadToS3.promise();
     console.log("Upload success:", data.Location);
 
-    // Ensure we construct the DigitalOcean URL correctly
-    let mainURL = data.Location;
-    // Fallback if Location is not what we expect (though for spaces it usually is)
-    if (!mainURL.includes("digitaloceanspaces.com")) {
-      mainURL = `https://${process.env.LINODE_OBJECT_BUCKET}.sgp1.digitaloceanspaces.com/${data.Key}`;
-    }
+    // IMPORTANT: AWS SDK returns path-style URL like:
+    // "https://sgp1.digitaloceanspaces.com/satyakabir-bucket/movies/..."
+    // We need virtual-hosted style URL:
+    // "https://satyakabir-bucket.sgp1.digitaloceanspaces.com/movies/..."
+    const mainURL = `https://${process.env.LINODE_OBJECT_BUCKET}.sgp1.digitaloceanspaces.com/${data.Key}`;
+
+    console.log("Corrected URL:", mainURL);
 
     res.status(201).json({
       success: true,
@@ -126,6 +127,7 @@ const createMovieOrWebSeries = async (req, res) => {
   const updatedGenre = parseIfString(genre);
   const updatedLanguage = parseIfString(language);
   const updatedSubSeries = parseIfString(subSeries);
+
   try {
     // if (!file || !poster || !name) {
     //   return res.status(400).json({
@@ -134,7 +136,10 @@ const createMovieOrWebSeries = async (req, res) => {
     //   });
     // }
 
-    const data = await MovieWebSeries.create({
+    // Handle web series nested structure from admin panel
+    // Admin panel sends: { mainType: "WEB_SERIES", subSeries: [{ name, description, Series: [...], ... }] }
+    // We need to extract data from subSeries[0] and flatten it
+    let finalData = {
       file,
       poster,
       teaserUrl,
@@ -155,7 +160,32 @@ const createMovieOrWebSeries = async (req, res) => {
       imdbRating,
       watchQuality: watchQuality || "HD",
       rating,
-    });
+      sessions: updatedSubSeries?.map((s) => s.session || 1) || [],
+    };
+
+    // If web series with nested structure, extract metadata to top level
+    if (mainType === "WEB_SERIES" && updatedSubSeries?.[0]) {
+      const seriesDetails = updatedSubSeries[0];
+      finalData = {
+        ...finalData,
+        name: seriesDetails.name || name,
+        description: seriesDetails.description || description,
+        poster: seriesDetails.poster || poster,
+        teaserUrl: seriesDetails.teaserUrl || teaserUrl,
+        cast: seriesDetails.cast || updatedCast,
+        releaseDate: seriesDetails.releaseDate || releaseDate,
+        releaseYear: seriesDetails.releaseYear || releaseYear,
+        director: seriesDetails.director || director,
+        writer: seriesDetails.writer || writer,
+        imdbRating: seriesDetails.imdbRating || imdbRating,
+        maturityInfo: seriesDetails.maturityInfo || maturityInfo,
+        totalDuration: seriesDetails.totalDuration || totalDuration,
+        rating: seriesDetails.rating || rating,
+        subSeries: updatedSubSeries,
+      };
+    }
+
+    const data = await MovieWebSeries.create(finalData);
 
     return res.status(201).json({
       success: true,
@@ -222,33 +252,57 @@ const updateMovieOrWebSeries = async (req, res) => {
       });
     }
 
+    let finalUpdateData = {
+      file,
+      poster,
+      teaserUrl,
+      name,
+      description,
+      releaseDate,
+      releaseYear,
+      director,
+      writer,
+      cast: updatedCast,
+      maturityInfo,
+      totalDuration,
+      genre: updatedGenre,
+      language: updatedLanguage,
+      mainType,
+      parentsSeries,
+      subSeries: updatedSubSeries,
+      imdbRating,
+      watchQuality: watchQuality || "HD",
+      index,
+      session,
+      sessions: updatedSubSeries?.map((s) => s.session || 1) || [],
+    };
+
+    // If web series with nested structure, extract metadata to top level
+    if (mainType === "WEB_SERIES" && updatedSubSeries?.[0]) {
+      const seriesDetails = updatedSubSeries[0];
+      finalUpdateData = {
+        ...finalUpdateData,
+        name: seriesDetails.name || name,
+        description: seriesDetails.description || description,
+        poster: seriesDetails.poster || poster,
+        teaserUrl: seriesDetails.teaserUrl || teaserUrl,
+        cast: seriesDetails.cast || updatedCast,
+        releaseDate: seriesDetails.releaseDate || releaseDate,
+        releaseYear: seriesDetails.releaseYear || releaseYear,
+        director: seriesDetails.director || director,
+        writer: seriesDetails.writer || writer,
+        imdbRating: seriesDetails.imdbRating || imdbRating,
+        maturityInfo: seriesDetails.maturityInfo || maturityInfo,
+        totalDuration: seriesDetails.totalDuration || totalDuration,
+        rating: seriesDetails.rating || rating,
+      };
+    }
+
     const data = await MovieWebSeries.findByIdAndUpdate(
       movieOrSeriesId,
-      {
-        file,
-        poster,
-        teaserUrl,
-        name,
-        description,
-        releaseDate,
-        releaseYear,
-        director,
-        writer,
-        cast: updatedCast,
-        maturityInfo,
-        totalDuration,
-        genre: updatedGenre,
-        language: updatedLanguage,
-        mainType,
-        parentsSeries,
-        subSeries: updatedSubSeries,
-        imdbRating,
-        watchQuality: watchQuality || "HD",
-        index,
-        session,
-      },
+      finalUpdateData,
       { new: true },
-    );
+    ).populate("genre language");
 
     return res.status(200).json({
       success: true,
@@ -278,6 +332,7 @@ const getAllByFilter = async (req, res) => {
     maxRating = 10,
     director,
     cast,
+    excludeEpisodes = "false", // New parameter to control episode filtering
   } = req.query;
 
   const skip = (Number(page) - 1) * limit;
@@ -316,7 +371,10 @@ const getAllByFilter = async (req, res) => {
 
     // Filter by release year
     if (year) {
-      filter.releaseYear = year;
+      filter.releaseDate = {
+        $gte: new Date(`${year}-01-01`),
+        $lt: new Date(`${Number(year) + 1}-01-01`),
+      };
     }
 
     // Filter by type (MOVIE or WEB_SERIES)
@@ -335,6 +393,12 @@ const getAllByFilter = async (req, res) => {
     // Filter by cast member
     if (cast) {
       filter["cast.name"] = { $regex: cast, $options: "i" };
+    }
+
+    // Filter out child episodes - only for mobile app, not for admin panel
+    // Admin panel needs to see all content including episodes for management
+    if (excludeEpisodes === "true") {
+      filter.parentsSeries = { $in: [null, undefined] };
     }
 
     // Execute query with filters
@@ -372,7 +436,59 @@ const getMovieOrSeriesById = async (req, res) => {
         message: "movieOrSeriesId and userId are required",
       });
     }
-    const data = await MovieWebSeries.findById(movieOrSeriesId);
+
+    let data;
+    let isNested = movieOrSeriesId.includes("_nested_");
+
+    if (isNested) {
+      const parts = movieOrSeriesId.split("_nested_");
+      const parentId = parts[0];
+      const idPart = parts[1];
+
+      let seasonIdx = 0;
+      let episodeIdx = 0;
+
+      if (idPart.includes("_")) {
+        const indexes = idPart.split("_");
+        seasonIdx = parseInt(indexes[0]);
+        episodeIdx = parseInt(indexes[1]);
+      } else {
+        episodeIdx = parseInt(idPart);
+      }
+
+      const parent =
+        await MovieWebSeries.findById(parentId).populate("genre language");
+
+      if (!parent || !parent.subSeries?.[seasonIdx]?.Series?.[episodeIdx]) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Episode Not Found !" });
+      }
+
+      const seasonData = parent.subSeries[seasonIdx];
+      const ep = seasonData.Series[episodeIdx];
+
+      // Create a virtual document for the episode
+      data = {
+        ...parent.toObject(),
+        _id: movieOrSeriesId,
+        name: ep.title || ep.name || `Episode ${episodeIdx + 1}`,
+        file: ep.file || ep.url,
+        poster: ep.poster || ep.thumbnail || parent.poster,
+        description: ep.description || parent.description,
+        mainType: "EPISODE",
+        parentsSeries: parentId,
+        session: seasonData.session || seasonIdx + 1, // Add session info
+        index: episodeIdx + 1,
+      };
+      // We need _doc for some property assignments below
+      data._doc = { ...data };
+    } else {
+      data =
+        await MovieWebSeries.findById(movieOrSeriesId).populate(
+          "genre language",
+        );
+    }
 
     if (!data) {
       return res.status(404).json({
@@ -383,24 +499,34 @@ const getMovieOrSeriesById = async (req, res) => {
 
     const moreLikeThis = await MovieWebSeries.find({
       genre: { $in: data.genre },
-      _id: { $nin: data._id },
+      _id: {
+        $nin: [isNested ? movieOrSeriesId.split("_nested_")[0] : data._id],
+      },
     });
     const watched = await WatchHistory.findOne({
       userId,
-      movieOrSeriesId: movieOrSeriesId,
+      movieOrSeriesId: isNested
+        ? movieOrSeriesId.split("_nested_")[0]
+        : movieOrSeriesId,
     });
     const wishListed = await WishList.findOne({
       userId,
-      movieOrSeriesId: movieOrSeriesId,
+      movieOrSeriesId: isNested
+        ? movieOrSeriesId.split("_nested_")[0]
+        : movieOrSeriesId,
     });
     const likeRate = await LikeRate.findOne({
       userId,
-      movieOrSeriesId: movieOrSeriesId,
+      movieOrSeriesId: isNested
+        ? movieOrSeriesId.split("_nested_")[0]
+        : movieOrSeriesId,
     });
 
     const rented = await MovieRent.findOne({
       userId,
-      movieId: movieOrSeriesId,
+      movieId: isNested
+        ? movieOrSeriesId.split("_nested_")[0]
+        : movieOrSeriesId,
       isActivePlan: true,
     });
 
@@ -409,20 +535,60 @@ const getMovieOrSeriesById = async (req, res) => {
     } else {
       await WatchHistory.create({
         userId,
-        movieOrSeriesId: movieOrSeriesId,
+        movieOrSeriesId: isNested
+          ? movieOrSeriesId.split("_nested_")[0]
+          : movieOrSeriesId,
       });
       data._doc.playTimeStamps = 0;
     }
 
-    if (data.mainType == "WEB_SERIES") {
-      data._doc.episode = data.parentsSeries
-        ? await MovieWebSeries.find({
-            $or: [
-              { parentsSeries: data.parentsSeries },
-              { _id: data.parentsSeries },
-            ],
-          })
-        : await MovieWebSeries.find({ parentsSeries: data._id });
+    if (data.mainType == "WEB_SERIES" || data.mainType == "EPISODE") {
+      let episodes = [];
+      const seriesId =
+        data.mainType === "EPISODE" ? data.parentsSeries : data._id;
+
+      // 1. Check for episodes in separate documents (parentsSeries pattern)
+      const separateEpisodes = await MovieWebSeries.find({
+        $or: [
+          { parentsSeries: seriesId },
+          { _id: seriesId }, // Include parent if it's considered part of the series
+        ],
+      });
+
+      if (separateEpisodes && separateEpisodes.length > 0) {
+        // Filter out the parent if it's just the container
+        episodes = separateEpisodes.filter((doc) => doc.mainType === "EPISODE");
+      }
+
+      // 2. Check for nested episodes in subSeries (admin panel pattern)
+      // We need to fetch the actual series document if the current 'data' is a virtual episode
+      let seriesDoc =
+        data.mainType === "EPISODE" && isNested
+          ? await MovieWebSeries.findById(seriesId)
+          : data;
+
+      if (seriesDoc && seriesDoc.subSeries && seriesDoc.subSeries.length > 0) {
+        // Iterate over ALL seasons (subSeries items)
+        seriesDoc.subSeries.forEach((season, sIdx) => {
+          if (season.Series && season.Series.length > 0) {
+            const seasonEpisodes = season.Series.map((ep, eIdx) => ({
+              _id: `${seriesDoc._id}_nested_${sIdx}_${eIdx}`, // Synthetic ID with Season Index
+              name: ep.title || ep.name || `Episode ${eIdx + 1}`,
+              file: ep.file || ep.url,
+              poster: ep.poster || ep.thumbnail,
+              description: ep.description || seriesDoc.description,
+              mainType: "EPISODE",
+              parentsSeries: seriesDoc._id,
+              session: season.session || sIdx + 1, // Critical for frontend grouping
+              index: eIdx + 1,
+            }));
+            episodes = [...episodes, ...seasonEpisodes];
+          }
+        });
+      }
+
+      data._doc.episodes = episodes;
+      data._doc.episode = episodes; // Keeping for backward compatibility
     }
 
     data._doc.isMyListed = wishListed ? true : false;
@@ -433,8 +599,8 @@ const getMovieOrSeriesById = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "MovieOrSeries Data Fetched Successfully.",
-      data: data,
-      moreLikeThis: moreLikeThis,
+      data: fixData(data),
+      moreLikeThis: fixData(moreLikeThis),
     });
   } catch (error) {
     return res.status(500).json({
@@ -531,8 +697,56 @@ const getTrailerMovieOrSeriesById = async (req, res) => {
         message: "movieOrSeriesId and userId are required",
       });
     }
-    const data =
-      await MovieWebSeries.findById(movieOrSeriesId).populate("genre language");
+
+    let data;
+    let isNested = movieOrSeriesId.includes("_nested_");
+
+    if (isNested) {
+      const parts = movieOrSeriesId.split("_nested_");
+      const parentId = parts[0];
+      const idPart = parts[1];
+
+      let seasonIdx = 0;
+      let episodeIdx = 0;
+
+      if (idPart.includes("_")) {
+        const indexes = idPart.split("_");
+        seasonIdx = parseInt(indexes[0]);
+        episodeIdx = parseInt(indexes[1]);
+      } else {
+        episodeIdx = parseInt(idPart);
+      }
+
+      const parent =
+        await MovieWebSeries.findById(parentId).populate("genre language");
+
+      if (!parent || !parent.subSeries?.[seasonIdx]?.Series?.[episodeIdx]) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Episode Not Found !" });
+      }
+
+      const seasonData = parent.subSeries[seasonIdx];
+      const ep = seasonData.Series[episodeIdx];
+      data = {
+        ...parent.toObject(),
+        _id: movieOrSeriesId,
+        name: ep.title || ep.name || `Episode ${episodeIdx + 1}`,
+        file: ep.file || ep.url,
+        poster: ep.poster || ep.thumbnail || parent.poster,
+        description: ep.description || parent.description,
+        mainType: "EPISODE",
+        parentsSeries: parentId,
+        session: seasonData.session || seasonIdx + 1,
+        index: episodeIdx + 1,
+      };
+      data._doc = { ...data };
+    } else {
+      data =
+        await MovieWebSeries.findById(movieOrSeriesId).populate(
+          "genre language",
+        );
+    }
 
     if (!data) {
       return res.status(404).json({
@@ -543,26 +757,65 @@ const getTrailerMovieOrSeriesById = async (req, res) => {
 
     const moreLikeThis = await MovieWebSeries.find({
       genre: { $in: data.genre },
-      _id: { $nin: data._id },
+      _id: {
+        $nin: [isNested ? movieOrSeriesId.split("_nested_")[0] : data._id],
+      },
     }).populate("genre language");
     const wishListed = await WishList.findOne({
       userId,
-      movieOrSeriesId: movieOrSeriesId,
+      movieOrSeriesId: isNested
+        ? movieOrSeriesId.split("_nested_")[0]
+        : movieOrSeriesId,
     });
     const likeRate = await LikeRate.findOne({
       userId,
-      movieOrSeriesId: movieOrSeriesId,
+      movieOrSeriesId: isNested
+        ? movieOrSeriesId.split("_nested_")[0]
+        : movieOrSeriesId,
     });
 
-    if (data.mainType == "WEB_SERIES") {
-      data._doc.episode = data.parentsSeries
-        ? await MovieWebSeries.find({
-            $or: [
-              { parentsSeries: data.parentsSeries },
-              { _id: data.parentsSeries },
-            ],
-          })
-        : await MovieWebSeries.find({ parentsSeries: data._id });
+    if (data.mainType == "WEB_SERIES" || data.mainType == "EPISODE") {
+      let episodes = [];
+      const seriesId =
+        data.mainType === "EPISODE" ? data.parentsSeries : data._id;
+
+      // 1. Check for separate episodes
+      const separateEpisodes = await MovieWebSeries.find({
+        $or: [{ parentsSeries: seriesId }, { _id: seriesId }],
+      });
+
+      if (separateEpisodes && separateEpisodes.length > 0) {
+        episodes = separateEpisodes.filter((doc) => doc.mainType === "EPISODE");
+      }
+
+      // 2. Check for nested episodes
+      let seriesDoc =
+        data.mainType === "EPISODE" && isNested
+          ? await MovieWebSeries.findById(seriesId)
+          : data;
+
+      if (seriesDoc && seriesDoc.subSeries && seriesDoc.subSeries.length > 0) {
+        // Iterate over ALL seasons (subSeries items)
+        seriesDoc.subSeries.forEach((season, sIdx) => {
+          if (season.Series && season.Series.length > 0) {
+            const seasonEpisodes = season.Series.map((ep, eIdx) => ({
+              _id: `${seriesDoc._id}_nested_${sIdx}_${eIdx}`, // Synthetic ID
+              name: ep.title || ep.name || `Episode ${eIdx + 1}`,
+              file: ep.file || ep.url,
+              poster: ep.poster || ep.thumbnail,
+              description: ep.description || seriesDoc.description,
+              mainType: "EPISODE",
+              parentsSeries: seriesDoc._id,
+              session: season.session || sIdx + 1,
+              index: eIdx + 1,
+            }));
+            episodes = [...episodes, ...seasonEpisodes];
+          }
+        });
+      }
+
+      data._doc.episodes = episodes;
+      data._doc.episode = episodes;
     }
 
     data._doc.isMyListed = wishListed ? true : false;

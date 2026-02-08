@@ -148,7 +148,7 @@ exports.getNotificationById = async (req, res) => {
     const data = await Notification.findByIdAndUpdate(
       notificationId,
       { seen: true },
-      { new: true }
+      { new: true },
     );
     if (!data) {
       return res.status(404).json({
@@ -161,6 +161,31 @@ exports.getNotificationById = async (req, res) => {
       success: true,
       message: "Notification Fetched Successfully",
       data: data,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// clear all notifications (delete all)
+exports.clearAllNotifications = async (req, res) => {
+  const { userId } = req.query;
+  try {
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "UserId is required",
+      });
+    }
+
+    const result = await Notification.deleteMany({ userId });
+
+    return res.status(200).json({
+      success: true,
+      message: `${result.deletedCount} notification(s) deleted successfully`,
     });
   } catch (error) {
     return res.status(500).json({

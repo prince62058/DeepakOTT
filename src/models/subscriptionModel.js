@@ -24,16 +24,27 @@ const subscriptionSchema = mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    planType:{
-      type:String,
-      enum:["FREE_PLAN", "YEARLY_PREMIUM_PLAN", "WATCH_AND_EARN_PLAN", "MONTHLY_PREMIUM", "PAY_PER_MOVIE_PLAN"]
+    freeWatchTimeLimit: {
+      type: Number,
+      default: 10, // Time limit in minutes for free plan users
+      comment: "Watch time limit in minutes for free users (0 = unlimited)",
     },
-    disable:{
-      type:Boolean,
-      default:false
-    }
+    planType: {
+      type: String,
+      enum: [
+        "FREE_PLAN",
+        "YEARLY_PREMIUM_PLAN",
+        "WATCH_AND_EARN_PLAN",
+        "MONTHLY_PREMIUM",
+        "PAY_PER_MOVIE_PLAN",
+      ],
+    },
+    disable: {
+      type: Boolean,
+      default: false,
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const Subscription = mongoose.model("Subscription", subscriptionSchema);

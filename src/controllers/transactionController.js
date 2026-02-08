@@ -2,87 +2,87 @@ const mongoose = require("mongoose");
 const transactionModel = require("../models/transactionModel.js");
 const userModel = require("../models/userModels.js");
 const WatchEarn = require("../models/watchEarnModel");
+const { Company } = require("../models/companyModel");
 const { generateTransactionId } = require("../utils/generateTransactionId.js");
 
-  // create transaction
-  const createTransaction = async (req, res) => {
-    try {
-      const { userId, amount, Type, bankOrUpiId, transactionId, message } = req.body;
+// create transaction
+const createTransaction = async (req, res) => {
+  try {
+    const { userId, amount, Type, bankOrUpiId, transactionId, message } =
+      req.body;
 
-      if (!userId || !amount || !Type) {
+    if (!userId || !amount || !Type) {
+      return res.status(400).json({
+        success: false,
+        message: "userId,amount and Type is required.",
+      });
+    }
+
+    const user = await userModel.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found.",
+      });
+    }
+    let transectionData;
+
+    const transactionMessage =
+      message ||
+      (Type === "CREDIT"
+        ? `₹${amount} credited to wallet.`
+        : `₹${amount} debited from wallet.`);
+
+    if (Type == "CREDIT") {
+      transectionData = await transactionModel.create({
+        userId,
+        amount,
+        Type,
+        status: "APPROVED",
+        transactionId: transactionId ? transactionId : generateTransactionId(),
+        message: transactionMessage,
+      });
+      const balance = user?.wallet + amount;
+      user.wallet = balance;
+      await user.save();
+    } else {
+      if (!bankOrUpiId) {
         return res.status(400).json({
           success: false,
-          message: "userId,amount and Type is required.",
+          message: "bankOrUpiId is required.",
         });
       }
 
-
-
-      const user = await userModel.findById(userId);
-      
-      if (!user) {
-        return res.status(404).json({
+      if (user.wallet < amount) {
+        return res.status(400).json({
           success: false,
-          message: "User not found.",
+          message: "Insufficient wallet balance for withdrawal.",
         });
       }
-      let transectionData;
 
-      const transactionMessage =
-        message ||
-        (Type === "CREDIT"
-          ? `₹${amount} credited to wallet.`
-          : `₹${amount} debited from wallet.`);
-
-      if (Type == "CREDIT") {
-        transectionData = await transactionModel.create({
-          userId,
-          amount,
-          Type,
-          status: "APPROVED",
-          transactionId: transactionId ? transactionId : generateTransactionId(),
-          message: transactionMessage,
-        });
-        const balance = user?.wallet + amount;
-        user.wallet = balance;
-        await user.save();
-      } else {
-        if (!bankOrUpiId) {
-          return res.status(400).json({
-            success: false,
-            message: "bankOrUpiId is required.",
-          });
-        }
-        
-        if (user.wallet < amount) {
-          return res.status(400).json({
-            success: false,
-            message: "Insufficient wallet balance for withdrawal.",
-          });
-        }
-        
-        transectionData = await transactionModel.create({
-          userId,
-          amount,
-          Type,
-          bankOrUpiId,
-          transactionId: "",
-          message: transactionMessage,
-        });
-        const balance = Number(user?.wallet - amount);
-        user.wallet = balance;
-        await user.save();
-      }
-
-      res.status(201).json({
-        success: true,
-        message: "Transection created successfully",
-        data: transectionData,
+      transectionData = await transactionModel.create({
+        userId,
+        amount,
+        Type,
+        bankOrUpiId,
+        transactionId: "",
+        message: transactionMessage,
       });
-    } catch (error) {
-      res.status(500).json({ success: false, error: error.message });
+      const balance = Number(user?.wallet - amount);
+      user.wallet = balance;
+      await user.save();
     }
-  };
+
+    res.status(201).json({
+      success: true,
+      message: "Transection created successfully",
+      data: transectionData,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
 
 const getListTransactionByUserId = async (req, res) => {
   try {
@@ -153,20 +153,63 @@ const getListTransactionByUserId = async (req, res) => {
     // 2️⃣ Apply Search / Filter in Code (based on populated data)
     let finalData = transactions;
 
+    // Fetch dynamic settings from Company
+    const company = await Company.findOne();
+    const targetHours = company?.watchEarnTarget || 50;
+    const rewardRate = company?.watchEarnRate || 0.1;
+
+    // Dynamically update messages and amounts to reflect current rate for UI consistency
+    finalData = finalData.map((tx) => {
+      if (tx.message && tx.message.includes("₹0.5/min")) {
+        // Calculate new amount based on the current rate (0.5 -> rewardRate)
+        const scaleFactor = rewardRate / 0.5;
+        tx.amount = Number((tx.amount * scaleFactor).toFixed(2));
+        tx.message = tx.message.replace("₹0.5/min", `₹${rewardRate}/min`);
+      }
+      return tx;
+    });
+
     if (search && search.trim() !== "") {
       const keyword = search.trim().toLowerCase();
 
-      finalData = finalData.filter(tx =>
-        tx.userId?.name?.toLowerCase().includes(keyword)
+      finalData = finalData.filter((tx) =>
+        tx.userId?.name?.toLowerCase().includes(keyword),
       );
     }
+
+    // 3️⃣ Fetch Watch & Earn Data (Current Month)
+    const now = new Date();
+    const periodKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+    // Find active plan or just the record for the current month
+    const watchAndEarnData = await WatchEarn.findOne({
+      userId,
+      periodKey,
+    }).select(
+      "monthlyMinutesWatched monthlyRewardAmount rewardRate isPlanActive",
+    );
+
+    const totalHours = watchAndEarnData
+      ? (watchAndEarnData.monthlyMinutesWatched / 60).toFixed(1)
+      : 0;
+
+    const hoursWatched = parseFloat(totalHours);
+    const progress = Math.min((hoursWatched / targetHours) * 100, 100);
 
     return res.status(200).json({
       success: true,
       message: "Transactions fetched successfully",
       data: finalData,
+      earnings: {
+        totalRewardAmount: watchAndEarnData?.monthlyRewardAmount || 0,
+        hoursWatched: hoursWatched,
+        targetHours: targetHours,
+        rewardRate: rewardRate,
+        progress: progress,
+        isPlanActive: watchAndEarnData?.isPlanActive || false,
+      },
       pagination: {
-        total: search ? finalData.length : total, // adjust total if search applied
+        total: search ? finalData.length : total,
         page: Number(page),
         limit: Number(limit),
         pages: Math.ceil((search ? finalData.length : total) / limit) || 1,
@@ -181,9 +224,6 @@ const getListTransactionByUserId = async (req, res) => {
     });
   }
 };
-
-
-
 
 // get transaction by id
 const getTransactionById = async (req, res) => {
@@ -234,7 +274,7 @@ const updateTransactionStatus = async (req, res) => {
     const data = await transactionModel.findByIdAndUpdate(
       tid,
       { status, message, transactionId },
-      { new: true }
+      { new: true },
     );
 
     if (status == "REJECTED") {
@@ -355,7 +395,7 @@ const filterTransaction = async (req, res) => {
     pipeline.push(
       { $sort: { createdAt: parseInt(sort) } },
       { $skip: skip },
-      { $limit: parseInt(limit) }
+      { $limit: parseInt(limit) },
     );
 
     // Execute aggregation pipeline

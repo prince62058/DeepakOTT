@@ -212,10 +212,44 @@ const imageToUrl = async (req, res) => {
   }
 };
 
+// delete subscription
+const deleteSubscription = async (req, res) => {
+  const { planId } = req.body;
+  try {
+    if (!planId) {
+      return res.status(400).json({
+        success: false,
+        message: "planId is required !",
+      });
+    }
+
+    const data = await Subscription.findById(planId);
+    if (!data) {
+      return res.status(404).json({
+        success: false,
+        message: "Subscription plan not found!",
+      });
+    }
+
+    await Subscription.findByIdAndDelete(planId);
+
+    return res.status(200).json({
+      success: true,
+      message: "Subscription plan deleted successfully.",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 module.exports = {
   createSubscription,
   updateSubscription,
   getAllSubscription,
   disableSubscription,
+  deleteSubscription,
   imageToUrl,
 };

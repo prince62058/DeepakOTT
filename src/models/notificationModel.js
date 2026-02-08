@@ -6,8 +6,8 @@ const notificationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "user",
     },
-    image:{
-     type:String,
+    image: {
+      type: String,
     },
     title: {
       type: String,
@@ -20,9 +20,13 @@ const notificationSchema = new mongoose.Schema(
     seen: {
       type: Boolean,
       default: false,
-    }
+    },
+    type: {
+      type: String,
+      default: "general",
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const Notification = mongoose.model("Notification", notificationSchema);
