@@ -23,6 +23,50 @@ const s3 = new AWS.S3({
   region: "sgp1",
 });
 
+// Generate Presigned URL for Direct Upload
+const getPresignedUrl = async (req, res) => {
+  try {
+    const { fileName, fileType } = req.body;
+
+    if (!fileName || !fileType) {
+      return res.status(400).json({
+        success: false,
+        message: "File name and type are required",
+      });
+    }
+
+    const key = `movies/${Date.now()}-${fileName}`;
+
+    // Params for the signed URL
+    const params = {
+      Bucket: process.env.LINODE_OBJECT_BUCKET,
+      Key: key,
+      Expires: 300, // URL expires in 5 minutes
+      ContentType: fileType,
+      ACL: "public-read",
+    };
+
+    // Generate signed URL
+    const signedUrl = await s3.getSignedUrlPromise("putObject", params);
+
+    // Public URL for accessing the file after upload
+    const publicUrl = `https://${process.env.LINODE_OBJECT_BUCKET}.sgp1.digitaloceanspaces.com/${key}`;
+
+    res.status(200).json({
+      success: true,
+      url: signedUrl,
+      publicUrl: publicUrl,
+      key: key,
+    });
+  } catch (error) {
+    console.error("Presigned URL Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 // upload controller for movies/ web series
 const uploadMovie = async (req, res) => {
   try {
