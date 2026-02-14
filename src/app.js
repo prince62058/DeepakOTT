@@ -71,6 +71,17 @@ app.use("/api", movieRentRoute);
 app.use("/api", dashboardRoute);
 
 // -----------------------------
+// 🔗 Web Redirection (Fallbacks for Deep Links)
+// -----------------------------
+const PLAY_STORE_URL =
+  "https://play.google.com/store/apps/details?id=com.deepakott";
+
+app.get(["/movie/:id", "/watch/:id"], (req, res) => {
+  console.log(`🔗 Redirection hitting for ${req.path}. Falling back to Store.`);
+  res.redirect(PLAY_STORE_URL);
+});
+
+// -----------------------------
 // 📱 Android App Link (Deep Link Verification)
 // -----------------------------
 app.get("/.well-known/assetlinks.json", (req, res) => {
